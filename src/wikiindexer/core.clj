@@ -4,6 +4,11 @@
 (require '[clojure.java.jdbc :as jdbc])
 (require '[clojure.java.io   :as io])
 
+;wiki api, can get metadata on pages, of particular interest are file sizes, to see if can include svgs:
+;https://www.mediawiki.org/wiki/API:Imageinfo
+;  example: replace file name after "File:"
+;    https://en.wikipedia.org/w/api.php?action=query&titles=File:Pythagorean.svg&prop=imageinfo&iiprop=size|timestamp
+
 ;notes on math markup
 ;  this is only visible in the dumps wiki markup, the html will only have an image file instead of the math markup
 ;    thus, if using downloaded html, will have to insert the math markup into the html. Not entirely trivial, but doable
@@ -59,17 +64,29 @@
 ;  BuffereInputReader.readLine returns nil when at EOF
 
 
-; (def fpath_dump "/Users/rflores/gearapps/resources/dumps/jawiki-20160501-pages-articles.xml")
-;;(def fpath_dump "/Users/rflores/gearapps/resources/dumps/tst.xml")
-; (def fpath_db   "/Users/rflores/gearapps/resources/dbs/test.db")
 
 
+(def proj       "w")
+(def lang       "en")
+(def fpath_dump "../resources/dumps/enwiki-20160601-pages-meta-current.xml")
+(def fpath_db   "../resources/dbs/enwiki.db")
 
+(def db-spec             {:classname "org.sqlite.JDBC" :subprotocol "sqlite" :subname fpath_db})
 (def relevant_namespaces {"0" "" "14" "Category:" "100" "Portal:" "108" "Book:"})  ;note: deal with languages other than English
 
-;(def opntags {:page "<page>" :title "<title>"})
-;(def clstags {"<page>" "</page>" "<title>" "</title>"})
 
+
+
+(defn parse_wikimarkuplink [redirect_str]
+  (let [redirect_str     (first (. (second (. redirect_str split "\\[\\[")) split "\\]\\]"))  ;get only the wikilink (text inside the [[ ]])
+        redirect_ns      (if (not= -1 (. redirect_str indexOf ":")) (first (. redirect_str split ":")))
+        redirect_section (if (not= -1 (. redirect_str indexOf "#")) (second (. redirect_str split ":")))
+        redirect_title   (let [parts     (. redirect_str split ":|#")  ;split by multiple delimiters, see: http://stackoverflow.com/questions/5993779/java-use-split-with-multiple-delimiters
+                               parts_cnt (count parts)]
+                           (cond (= 1 parts_cnt) (first parts)
+                                 (= 2 parts_cnt) (if redirect_ns (second parts) (first parts))
+                                 (= 3 parts_cnt) (second parts)))]
+    {:title redirect_title :section redirect_section :ns redirect_ns}))
 
 (defn get_template_names_within [text]                                               ;returns vec with 2 elems: first is a set of all template names within text, second is also such a set, but of magic word parser functions (see doc urls in comment below)
   (let [templates (re-seq #"\{\{.*\}\}" text)]
@@ -89,8 +106,8 @@
         [template_names_acc magicwords_parserfunc_names_acc]))))
 
 
-(defn make_reader_automaton [s]                             ;makes a closure which can be fed chars indefinitely and returns truish (see below) whenever the chars form the target string
-  (let [idxmark (atom 0) lastidx (dec (count s))]       ;ret value: length of string - 1, so that the caller knows how many chars to go back to mark that idx as the start of the string's occurrence
+(defn make_reader_automaton [s]                      ;makes a closure which can be fed chars indefinitely and returns truish (see below) whenever the chars form the target string
+  (let [idxmark (atom 0) lastidx (dec (count s))]    ;ret value: length of string - 1, so that the caller knows how many chars to go back to mark that idx as the start of the string's occurrence
     (fn [c]
       (if (= (nth s @idxmark) c)
           (if (= @idxmark lastidx)
@@ -181,6 +198,7 @@
                   (do
                     (let [
                           title                        (if (= ns_prefix "") title (second (. title split ns_prefix))) ;get rid of namespace prefix on the title, if any
+                          redirect_str                 (first (re-seq #"#REDIRECT\s*\[\[.*\]\]" text))
                           [template_names
                           magicword_parserfunc_names]  (get_template_names_within text)
                           math_markup_present          (not= (. text indexOf "</math>") -1)
@@ -188,6 +206,12 @@
                           score_markup_present         (not= (. text indexOf "</score>") -1)
                           svg_files_present            (boolean (re-seq #"\[\[.*\.svg\]\]" text))
                          ]
+                      (if redirect_str          ;process the redirect here
+                          ;(prn (parse_wikimarkuplink redirect_str))
+                          (let [redirect_info (parse_wikimarkuplink redirect_str)]
+                            
+                          )
+                      )
                       
                       (println (str "title: " title))
                       (println (str "ns   : " ns_))
@@ -213,27 +237,69 @@
 
 
 
-(def db-spec {:classname   "org.sqlite.JDBC"
-              :subprotocol "sqlite"
-              :subname     fpath_db})
 
 
 
 ;http://clojure-doc.org/articles/ecosystem/java_jdbc/home.html
 
-(jdbc/with-db-connection [db-con db-spec]  ;note that running this creates the db file, so no need to create it beforehand
-  (let [table_names (set (map :name (jdbc/query db-con ["SELECT name FROM sqlite_master WHERE type='table'"])))]
-    (prn table_names)
-    (if (not (table_names "article"))
-      (do (println "'article' table not found, will make it")
-          (jdbc/db-do-commands db-spec
-                               (jdbc/create-table-ddl :article [
-                                                                [:title    :text    "primary key"]
-                                                                [:rel_rwid :integer "not null"]
-                                                               ])
-      )))
-))
+(defn db__ins_article_new [title ns_]
 
+)
+(defn db__ins_redirect_new [title ns_ to_title to_section to_ns]
+
+)
+
+
+(jdbc/with-db-connection [db-con db-spec wikiproj wikilang]  ;note that running this creates the db file, so no need to create it beforehand
+  (let [table_names (set (map :name (jdbc/query db-con ["SELECT name FROM sqlite_master WHERE type='table'"])))]
+    (if (empty? table_names)
+        (let [tbl (hash-map (keyword (str "title"    "_" proj "_" ns_code))
+                            [[:title       :text    "primary key"]
+                             [:is_redirect :integer "not null"   ]
+                             [:rel_rwid    :integer              ]]
+(keyword (str "title"    "_" proj "_" ns_code))
+                            [[:title       :text    "primary key"]
+                             [:is_redirect :integer "not null"   ]
+                             [:rel_rwid    :integer              ]]
+(keyword (str "title"    "_" proj "_" ns_code))
+                            [[:title       :text    "primary key"]
+                             [:is_redirect :integer "not null"   ]
+                             [:rel_rwid    :integer              ]]
+(keyword (str "title"    "_" proj "_" ns_code))
+                            [[:title       :text    "primary key"]
+                             [:is_redirect :integer "not null"   ]
+                             [:rel_rwid    :integer              ]]
+
+
+                  )
+              ddl (loop [acc tbl ns_codes (keys relevant_namespaces)]
+                    (if-let [ns_code (first ns_codes)]
+                      (recur
+                        (conj acc
+                              (hash-map (keyword (str "title"    "_" proj "_" ns_code))
+                                        [[:title       :text    "primary key"]
+                                         [:is_redirect :integer "not null"   ]
+                                         [:rel_rwid    :integer              ]])
+                              (hash-map (keyword (str "redirect" "_" proj "_" ns_code))
+                                        [[:title       :text    "primary key"]
+                                         [:is_redirect :integer "not null"   ]
+                                         [:rel_rwid    :integer              ]])
+                              (hash-map (keyword (str "article" "_" proj "_" ns_code))
+                                        [[:wikimarkup        :text           ]
+                                         [:html              :text           ]
+                                         [:wikimarkup_tstamp :text           ]
+                                         [:html_tstamp       :text           ]
+                                         [:generated_html    :text           ]])
+                        (rest ns_codes))
+                      acc))]
+         (doseq [sttmnt ddl]
+           (jdbc/db-do-commands db-spec (jdbc/create-table-ddl (first sttmnt) (second sttmnt))))))))
+;        (loop [ddl ddl]
+;          (if-let [sttmnt (first ddl)]
+;            (do
+;              (jdbc/db-do-commands db-spec (jdbc/create-table-ddl (first sttmnt) (second sttmnt)))
+;              (recur (rest ddl)))))))))
+            
 ;(jdbc/with-db-connection [db-con db-spec]
 ;  (let [rows (jdbc/query db-con ["SELECT * FROM fruit"])]
 ;    (prn rows)))
