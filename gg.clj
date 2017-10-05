@@ -15,6 +15,22 @@
 (defn drop-nth [n coll]
    (keep-indexed #(if (not= %1 n) %2) coll))
 
+
+(defn ins_into_vector [v i e] (apply conj (subvec v 0 i) e (subvec v i)))
+
+(defn permutations
+  ([s]
+    (let [l (count s)]
+      (cond (zero? l) []
+            (= l 1)   [[(first s)]]
+            :else     (let [ins_e_into_every_idx_of (fn [v e]  (mapv #(ins_into_vector v % e)    ;v=vector (a permutation), e=element (to insert into all positions of v)
+                                                                     (range (inc (count v)))))
+                            e     (first s)]
+                        (mapcat #(ins_e_into_every_idx_of % e)
+                                (permutations (disj s e)))))))
+  ([s k] 0) ;TODO
+)
+
 (defn permutations_w_rep [s]
   (into (comb/permutations s) (map (partial repeat (count s)) s)))
 
@@ -39,6 +55,45 @@
 
 ;;; ds&alg practice:START ;;;
 
+;https://www.youtube.com/watch?v=XKu_SEDAykw
+;https://www.youtube.com/watch?v=DFG-XuyPYUQ
+(defn insertion_sort [s]
+  (reduce (fn [acc e]
+            (let [[lte gte] (split-with (partial > e) acc)]
+              (concat lte [e] gte)))
+          [], s))
+
+(defn insertion_sort [s p]
+  (letfn [(insert_keep_sorted [s e]
+           (let [i (reduce #(if (p e %2) (reduced %1) (inc %1)), 0, s)] ;or just use split-with as above
+             (concat (take i s) [e] (drop i s))))]
+    (reduce insert_keep_sorted, [], s)))
+
+(defn mergesort [c]
+  (letfn [(join_sorted [a b]
+            (loop [a a, b b, acc []]
+              (cond (empty? a) (into acc b)
+                    (empty? b) (into acc a)
+                    :else      (let [x (first a), y (first b), take_from_a? (<= x y)]
+                                 (recur (if take_from_a? (rest a) a)
+                                        (if take_from_a? b (rest b))
+                                        (if take_from_a? (conj acc x) (conj acc y)))))))]
+    (let [len (count c)] (if (<= len 1) c (let [splt (split-at (int (/ len 2)) c)] (join_sorted (mergesort (first splt)) (mergesort (second splt))))))))
+
+;(defn quicksort [s]
+;  (letfn [(qsp [s pi] ;qsp=quicksort pass, pi=pivot index
+;            (let [l (count s)]
+;              (loop [i 0, pi pi, s s]
+;                (if (= i l)
+;                  s
+;                  (if (< (nth s i) (nth s pi))
+;                    (if (<= i pi)
+;                      (recur (inc i), pi pi, s)
+;                      (recur i, (dec pi), (concat (take (inc i)
+;         ]
+;
+;)
+
 (def A1 [[1  2  3  4 ]
          [5  6  7  8 ]
          [9  10 11 12]
@@ -49,18 +104,18 @@
          [9  10 11 12]
          [13 14 15 16]])
 
-(defn mm [A B] ;pg77
-  (let [n   (count (first A))
-        rec (fn rec [n i j]
-              (if (= 1 n)
-                [(* (get (get A i) j) (get (get B i) j))]
-                222
-                
-              ))
-        
-       ]
-    (rec 1 1 1)
-))
+;(defn mm [A B] ;pg77
+;  (let [n   (count (first A))
+;        rec (fn rec [n i j]
+;              (if (= 1 n)
+;                [(* (get (get A i) j) (get (get B i) j))]
+;                222
+;                
+;              ))
+;        
+;       ]
+;    (rec 1 1 1)
+;))
 
 (defn maximum_subarray_linear [c]
   (let [max_subarrs (loop [i 0, l 0, r 0, sum 0, acc {}]
@@ -75,7 +130,7 @@
         max_subarrs (map #(vector (reduce + (subvec c (first %) (inc (second %)))) %) max_subarrs)]
     max_subarrs)) ;just choose the max_subarr with maximum sum, may be more than 1, so you can further choose by earliest, or remove those of only 1 element, etc, it's more flexible than the single result in the recursive version below
 
-(defn maximum_subarray  ;this one's recursive, solution above is has better complexity (n)
+(defn maximum_subarray  ;this one's recursive, solution above has better complexity (n)
   ([c]
     (maximum_subarray c 0 (dec (count c))))
   ([c i j]
@@ -111,27 +166,15 @@
       (let [mxs (max ls rs ms)]
         (cond (= mxs ls) lm (= mxs rs) rm (= mxs ms) mm))))))
 
-
-
 ;;; ds&alg practice:CLOSE ;;;
 
 ;;; rosettacode:START ;;;
-
-;https://www.youtube.com/watch?v=XKu_SEDAykw
-;https://www.youtube.com/watch?v=DFG-XuyPYUQ
-(defn insertion_sort [s]
-  (reduce (fn [acc e]
-            (let [[lte gte] (split-with (partial > e) acc)]
-              (concat lte [e] gte)))
-          []
-          s))
-
 
 (defn accumulator_factory [n]
   (let [acc (atom n)]
     (fn [m] (swap! acc + m))))
 
-;(defn spiral_matrix [n]
+;(defn spiral_matrix [n] ;where did I have the code for this? also document paper note
 
 ;Harshad or Niven series
 ;(defn harshads [n]
@@ -571,12 +614,23 @@
                (conj acc (set (vals (select-keys s
                                                  (idxs_of_ones_in_bin_str i))))))))))
 
+(defn powerset [s] (p85 s))
+
+(defn powerset [s]
+  (if (empty? s)
+      #{#{}}
+      (let [e (first s), s (disj s e), p (powerset s)]
+        (clojure.set/union p, (map (partial clojure.set/union #{e}) p)))))
+
+(defn powerset [s] ;we get an iterative version by turning the recursion above inside-out
+  (reduce #(clojure.set/union %1 (set (map (partial clojure.set/union #{%2}) %1)))
+          #{#{}}
+          s))
+
 (defn p85 [s]
   (reduce #(into %1 (for [ss %1] (conj ss %2))) ;ss=subset
           #{#{}}
           s))
-
-(defn powerset [c] (p85 c))
 
 (defn p86 [n]
   (loop [n n, acc #{}]
@@ -1850,33 +1904,6 @@
 
 
 
-
-;(defn quicksort [s]
-;  (letfn [(qsp [s pi] ;qsp=quicksort pass, pi=pivot index
-;            (let [l (count s)]
-;              (loop [i 0, pi pi, s s]
-;                (if (= i l)
-;                  s
-;                  (if (< (nth s i) (nth s pi))
-;                    (if (<= i pi)
-;                      (recur (inc i), pi pi, s)
-;                      (recur i, (dec pi), (concat (take (inc i)
-;         ]
-;
-;)
-
-
-
-(defn mergesort [c]
-  (letfn [(join_sorted [a b]
-            (loop [a a, b b, acc []]
-              (cond (empty? a) (into acc b)
-                    (empty? b) (into acc a)
-                    :else      (let [x (first a), y (first b), take_from_a? (<= x y)]
-                                 (recur (if take_from_a? (rest a) a)
-                                        (if take_from_a? b (rest b))
-                                        (if take_from_a? (conj acc x) (conj acc y)))))))]
-    (let [len (count c)] (if (<= len 1) c (let [splt (split-at (int (/ len 2)) c)] (join_sorted (mergesort (first splt)) (mergesort (second splt))))))))
 
 ;;; ds&alg practice:CLOSE ;;;
 

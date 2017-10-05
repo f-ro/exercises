@@ -5,6 +5,9 @@
 (import '(java.io File))
 (import '(java.io FileNotFoundException))
 
+;(defn filenames_in_dl_dir [] (.listFiles (File. gbl/fpath_dl_dir))])
+
+(defn title_html_exists_in_dl_dir [title] (.exists (io/as-file (str gbl/fpath_dl_dir (:id title) ".html"))))
 
 (defn largest_filename_in_dl_dir []  ;get last downloaded id, as per largest filename in gbl/fpath_dl_dir, 0 if no files
   (loop [files (.listFiles (File. gbl/fpath_dl_dir)), maxfnamenum 0]     

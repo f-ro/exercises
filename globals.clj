@@ -8,8 +8,8 @@
 (def dump_year  "2016")
 (def dump_month "07")
 (def dump_day   "20")
-;(def fpath_base "/Volumes/MP2T/wikiindexer/")
-(def fpath_base "/Users/ghost/wikiindexer/")
+(def fpath_base "/Volumes/2TBMP/wikiindexer/")
+;(def fpath_base "/Users/ghost/wikiindexer/")
 (def dump_fnames {
                    "w-en" "enwiki-20160720-pages-articles.xml"       ;;; "enwiki-20160720-pages-articles--short.xml"
                    "w-ja" "jawiki-20161101-pages-articles.xml"
@@ -21,7 +21,7 @@
 (def fpath_dump    (str fpath_base "dumps/" (dump_fnames projkey)))
 (def runningdevs_cnt 1)     ;3 runningdevs
 (def runningdev_id   0)     ;0:iMac, 1:macbook air, 2:home
-(def dl_sleep        1000)  ;milliseconds to sleep between each download
+(def dl_sleep        50)  ;milliseconds to sleep between each download
 (def dl_network_exception_sleep   (* 22 1 1000))  ;milliseconds to sleep before retry in case of network exception (11 minutes)
 (def fpath_dl_dir_base      (str fpath_base "dl/" projkey "/html_cont/"))
 (def fpath_dl_dir           (str fpath_dl_dir_base runningdev_id "/"))

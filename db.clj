@@ -26,6 +26,8 @@
 (declare select__title__downloadtargetsonly____dlquick)
 (declare select__title__nonredirects__title_ns)
 (declare select__title__all__title_ns)
+(declare select__title__not_downloaded_yet_some__id_title_ns)
+(declare update_title__dl_tstamp)
 (declare select__title__id)
 (declare select__template__all)
 (declare select__template__all__id_name_occcount)
@@ -33,6 +35,9 @@
 ;(declare insert__process_info__chars_processed)
 (declare insert_multi!) ;;;wrapper around jdbc/insert-multi! that returns list of rowids for the newly inserted rows (same order as rows)
 
+
+(defn update_title__dl_tstamp [db_con rowid dl_tstamp]
+  (jdbc/update! db_con "title" {:dl_tstamp dl_tstamp} ["id=?" rowid]))
 
 (defn ensure_fdb_exists [db_con]
   ;(jdbc/with-db-connection [db_con fdb_spec]
@@ -89,6 +94,10 @@
 
 (defn select__title__nonredirects__title_ns []
   (jdbc/with-db-connection [db_con db_spec] (jdbc/query db_con ["SELECT title,ns FROM title WHERE is_redirect='0'"])))
+
+(defn select__title__not_downloaded_yet_some__id_title_ns []
+  (jdbc/with-db-connection [db_con db_spec] (jdbc/query db_con
+    ["SELECT id,title,ns FROM title WHERE is_redirect='0' and dl_tstamp is null LIMIT 50000"])))
   
 (defn select__title__downloadtargetsonly____dlquick [from_id]
   (let [qry (str "SELECT id,title,ns FROM title WHERE "
