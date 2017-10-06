@@ -26,6 +26,7 @@
 (declare select__title__downloadtargetsonly____dlquick)
 (declare select__title__nonredirects__title_ns)
 (declare select__title__all__title_ns)
+(declare select__title__where_dl_tstamp_is_zeros_some)
 (declare select__title__not_downloaded_yet_some__id_title_ns)
 (declare update_title__dl_tstamp)
 (declare select__title__id)
@@ -95,9 +96,13 @@
 (defn select__title__nonredirects__title_ns []
   (jdbc/with-db-connection [db_con db_spec] (jdbc/query db_con ["SELECT title,ns FROM title WHERE is_redirect='0'"])))
 
-(defn select__title__not_downloaded_yet_some__id_title_ns []
-  (jdbc/with-db-connection [db_con db_spec] (jdbc/query db_con
-    ["SELECT id,title,ns FROM title WHERE is_redirect='0' and dl_tstamp is null LIMIT 50000"])))
+(defn select__title__where_dl_tstamp_is_zeros_some [db_con]
+  (jdbc/query db_con
+    ["SELECT id,title,ns FROM title WHERE is_redirect='0' and dl_tstamp='000000' LIMIT 1"]))
+
+(defn select__title__not_downloaded_yet_some__id_title_ns [db_con]
+  (jdbc/query db_con
+    ["SELECT id,title,ns FROM title WHERE is_redirect='0' and dl_tstamp is null LIMIT 100"]))
   
 (defn select__title__downloadtargetsonly____dlquick [from_id]
   (let [qry (str "SELECT id,title,ns FROM title WHERE "
