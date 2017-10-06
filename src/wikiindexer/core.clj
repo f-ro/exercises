@@ -332,22 +332,64 @@
 
 (defn runproc_update_dl_lu_tstamps []
   (jdbc/with-db-connection [db_con db/db_spec]
-    (loop [i 0, titles (db/select__title__not_downloaded_yet_some__id_title_ns)]
+    (loop [i 0, titles (db/select__title__not_downloaded_yet_some__id_title_ns db_con)]
       (if-let [title (first titles)]
         (do 
           (if (fil/title_html_exists_in_dl_dir title)
             (let [lu_ts (.format (java.text.SimpleDateFormat. "yyMMdd")
                                  (java.util.Date. (.lastModified (File. (str gbl/fpath_dl_dir (:id title) ".html")))))]
-              (when (zero? (mod i 100))
-                (println (str (:id title) " " lu_ts)))
+              (when (zero? (mod i 100)) (println (str (:id title) " " lu_ts)))
               (db/update_title__dl_tstamp db_con (:id title) lu_ts))
             (db/update_title__dl_tstamp db_con (:id title) "000000"))
           (recur (inc i), (rest titles)))
-))))
-;        (let [titles (db/select__title__not_downloaded_yet_some__id_title_ns)] ;refill
-;          (if (first titles)
-;            (recur (inc i), titles)
-;            (println "*** done ***")))))))
+        (let [titles (db/select__title__not_downloaded_yet_some__id_title_ns db_con)] ;refill
+          (if (first titles)
+            (recur (inc i), titles)
+            (println "*** done ***")))))))
+
+(defn runproc_missing_htmls_download [] ;copy-paste of runproc_download_html_quick, but with commented lines below changed/added, also the recurs use (inc i) instead of title ids
+  (jdbc/with-db-connection [db_con db/db_spec]
+    (loop [i 0, titles (db/select__title__where_dl_tstamp_is_zeros_some db_con)] ;;changed db func here and in refill below
+      (if-let [title (first titles)]
+        (if (= gbl/runningdev_id (mod (:id title) gbl/runningdevs_cnt))
+          (do
+            (when (zero? (mod i 100)) (println i)) ;;added this line
+            (loop [procflag_pause (procflag? :html_download :pause)]
+              (if procflag_pause
+                  (do (println "pause file detected, sleeping for 1 minute...")
+                      (Thread/sleep (* 60 1000))
+                      (recur (procflag? :html_download :pause)))))
+            (if-not (procflag? :html_download :stop)
+              (let [dl_file_path (str gbl/fpath_dl_dir (:id title)  ".html")
+                    html         (try (slurp (htm/url_for_title title))
+                                   (catch FileNotFoundException         e  (do
+                                                                             (println (str "FileNotFoundException for title id, does not exist in server anymore, skipping:" (:id title)))
+                                                                             (fil/append_to_runningdev_id_log__fnfe title)
+                                                                             :skip))
+                                   (catch java.net.UnknownHostException e  (do (println (str "network exception:" (type e) ", for id:" (:id title) ", will retry.")) :retry))
+                                   (catch java.net.ConnectException     e  (do (println (str "network exception:" (type e) ", for id:" (:id title) ", will retry.")) :retry))
+                                   (catch javax.net.ssl.SSLException    e  (do (println (str "network exception:" (type e) ", for id:" (:id title) ", will retry.")) :retry))
+                                   (catch java.io.IOException           e  (do (println (str "network exception:" (type e) ", for id:" (:id title) ", will retry.")) :retry)))]
+                (if (instance? String html)
+                  (if-let [html_cont (htm/get_content html)]
+                    (do
+                      (spit dl_file_path html_cont)
+                      (db/update_title__dl_tstamp db_con (:id title) (.format (java.text.SimpleDateFormat. "yyMMdd") (java.util.Date.)))  ;;added this line too
+                      (Thread/sleep gbl/dl_sleep)
+                      (recur (inc i) (rest titles)))
+                    (println "cont_start_str not found in html! stopping"))
+                  (do
+                    (Thread/sleep gbl/dl_network_exception_sleep)
+                    (case html
+                      :retry (recur (inc i) titles)
+                      :skip  (recur (inc i) (rest titles))))))
+              (println  "stop file detected, ending here")))
+          (recur (:id title) (rest titles)))
+        (let [titles (db/select__title__where_dl_tstamp_is_zeros_some db_con)] ;refill
+          (if (first titles)
+            (recur (inc i) titles)
+            (println "*** done ***")))))))
+      
 
 
 (defn runproc_download_html_quick [] 
