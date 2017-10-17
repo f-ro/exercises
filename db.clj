@@ -5,7 +5,7 @@
 (require '[clojure.string    :as str])
 (import '(java.sql.SQLException))
 
-(def fpath_db           (str gbl/fpath_base "dbs/" gbl/projkey ".db"))
+(def fpath_db           (str "/Users/rflores/wikiindexer/" "dbs/" gbl/projkey ".db"))  ;(str gbl/fpath_base "dbs/" gbl/projkey ".db"))
 (def fpath_db__dlquick  (str gbl/fpath_base "dbs/" gbl/projkey " --dl_quick.db"))
 (def fpath_fdb          (str gbl/fpath_base "dbs/" "files" ".db"))
 (def db_spec            {:classname "org.sqlite.JDBC" :subprotocol "sqlite" :subname fpath_db})
@@ -96,13 +96,13 @@
 (defn select__title__nonredirects__title_ns []
   (jdbc/with-db-connection [db_con db_spec] (jdbc/query db_con ["SELECT title,ns FROM title WHERE is_redirect='0'"])))
 
-(defn select__title__where_dl_tstamp_is_zeros_some [db_con]
+(defn select__title__where_dl_tstamp_is_zeros_some [db_con] ;TODO: namespace column values hardcoded
   (jdbc/query db_con
-    ["SELECT id,title,ns FROM title WHERE is_redirect='0' and dl_tstamp='000000' LIMIT 1"]))
+    ["SELECT id,title,ns FROM title WHERE is_redirect='0' and dl_tstamp='000000' and ns in ('0','100','108') LIMIT 500"]))
 
 (defn select__title__not_downloaded_yet_some__id_title_ns [db_con]
   (jdbc/query db_con
-    ["SELECT id,title,ns FROM title WHERE is_redirect='0' and dl_tstamp is null LIMIT 100"]))
+    ["SELECT id,title,ns FROM title WHERE is_redirect='0' and dl_tstamp is null LIMIT 500"]))
   
 (defn select__title__downloadtargetsonly____dlquick [from_id]
   (let [qry (str "SELECT id,title,ns FROM title WHERE "

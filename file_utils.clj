@@ -7,7 +7,8 @@
 
 ;(defn filenames_in_dl_dir [] (.listFiles (File. gbl/fpath_dl_dir))])
 
-(defn title_html_exists_in_dl_dir [title] (.exists (io/as-file (str gbl/fpath_dl_dir (:id title) ".html"))))
+(defn title_html_exists_in_dl_dir [title]
+  (.exists (io/as-file (str gbl/fpath_dl_dir (:id title) ".html"))))
 
 (defn largest_filename_in_dl_dir []  ;get last downloaded id, as per largest filename in gbl/fpath_dl_dir, 0 if no files
   (loop [files (.listFiles (File. gbl/fpath_dl_dir)), maxfnamenum 0]     
@@ -73,3 +74,23 @@
           (println (str i "/" fnamenums_cnt))
           (println (str "**done**"))
           (spit log_path prev_fnamenum))))))
+
+(defn move_to_dl_dir [from_dir to_dir]
+  (let [files               (.listFiles (File. from_dir))
+        files               (filter #(let [fnamenum (try (Integer/parseInt (apply str (drop-last 5 (.getName %1)))) (catch Exception e nil))]
+                                       fnamenum)
+                                    files)
+        fnamenums           (sort (map #(Integer/parseInt (apply str (drop-last 5 (.getName %1)))) files))
+        fnamenums_cnt       (count fnamenums)]
+    (loop [fnamenums fnamenums, i 0]
+      (when (zero? (mod i 100)) (println i))
+      (if-let [fnamenum (first fnamenums)]
+        (do
+          (io/copy (io/file (str from_dir fnamenum ".html"))
+                   (io/file (str to_dir fnamenum ".html")))
+          (io/delete-file (io/file (str from_dir fnamenum ".html")))
+          (recur (rest fnamenums), (inc i)))
+        (do
+          (println (str i "/" fnamenums_cnt))
+          (println (str "**done**")))))))
+
