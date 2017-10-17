@@ -333,27 +333,31 @@
 (defn runproc_update_dl_lu_tstamps []
   (jdbc/with-db-connection [db_con db/db_spec]
     (loop [i 0, titles (db/select__title__not_downloaded_yet_some__id_title_ns db_con)]
-      (if-let [title (first titles)]
-        (do 
-          (if (fil/title_html_exists_in_dl_dir title)
-            (let [lu_ts (.format (java.text.SimpleDateFormat. "yyMMdd")
-                                 (java.util.Date. (.lastModified (File. (str gbl/fpath_dl_dir (:id title) ".html")))))]
-              (when (zero? (mod i 100)) (println (str (:id title) " " lu_ts)))
-              (db/update_title__dl_tstamp db_con (:id title) lu_ts))
-            (db/update_title__dl_tstamp db_con (:id title) "000000"))
-          (recur (inc i), (rest titles)))
-        (let [titles (db/select__title__not_downloaded_yet_some__id_title_ns db_con)] ;refill
-          (if (first titles)
-            (recur (inc i), titles)
-            (println "*** done ***")))))))
+      (if-not (procflag? :html_download :stop)
+        (if-let [title (first titles)]
+          (do
+           ;(println (str (:id title) ", " (:title title)))
+            (when (zero? (mod i 1000)) (println i))
+           ;(when (zero? (mod i 1000)) (println (str (:id title) ", " (:title title))))
+            (if (fil/title_html_exists_in_dl_dir title)
+              (let [lu_ts (.format (java.text.SimpleDateFormat. "yyMMdd")
+                                   (java.util.Date. (.lastModified (File. (str gbl/fpath_dl_dir (:id title) ".html")))))]
+               ;(println (str (:id title) ", " lu_ts))
+                (db/update_title__dl_tstamp db_con (:id title) lu_ts))
+              (db/update_title__dl_tstamp db_con (:id title) "000000"))
+            (recur (inc i), (rest titles)))
+          (let [titles (db/select__title__not_downloaded_yet_some__id_title_ns db_con)] ;refill
+            (if (first titles)
+              (recur (inc i), titles)
+              (println "*** done ***"))))
+        (println  "stop file detected, ending here")))))
 
 (defn runproc_missing_htmls_download [] ;copy-paste of runproc_download_html_quick, but with commented lines below changed/added, also the recurs use (inc i) instead of title ids
   (jdbc/with-db-connection [db_con db/db_spec]
     (loop [i 0, titles (db/select__title__where_dl_tstamp_is_zeros_some db_con)] ;;changed db func here and in refill below
-      (if-let [title (first titles)]
-        (if (= gbl/runningdev_id (mod (:id title) gbl/runningdevs_cnt))
-          (do
-            (when (zero? (mod i 100)) (println i)) ;;added this line
+      (if-let [title (first titles)]    ;removed device id check
+          (do 
+            (when (zero? (mod i 100)) (println (str (:id title) ", " (:title title)))) ;;added this line
             (loop [procflag_pause (procflag? :html_download :pause)]
               (if procflag_pause
                   (do (println "pause file detected, sleeping for 1 minute...")
@@ -382,9 +386,10 @@
                     (Thread/sleep gbl/dl_network_exception_sleep)
                     (case html
                       :retry (recur (inc i) titles)
-                      :skip  (recur (inc i) (rest titles))))))
+                      :skip  (do 
+                               (db/update_title__dl_tstamp db_con (:id title) "444444")
+                               (recur (inc i) (rest titles)))))))
               (println  "stop file detected, ending here")))
-          (recur (:id title) (rest titles)))
         (let [titles (db/select__title__where_dl_tstamp_is_zeros_some db_con)] ;refill
           (if (first titles)
             (recur (inc i) titles)
